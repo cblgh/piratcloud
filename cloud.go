@@ -15,10 +15,10 @@ import (
 type BackupEntry struct {
 	Hash string
 	Key  string
+	Note string
 }
 
 var backups []BackupEntry
-
 var filepath = ".piratcloud"
 
 func save(stuff []BackupEntry, savePath string) {
@@ -35,7 +35,6 @@ func save(stuff []BackupEntry, savePath string) {
 }
 
 func load(savePath string) {
-	fmt.Println("wow load stuff")
 	data, err := ioutil.ReadFile(savePath)
 	if err != nil {
 		fmt.Println(err)
@@ -44,7 +43,7 @@ func load(savePath string) {
 	json.Unmarshal(data, &backups)
 }
 
-func upload(dir string) {
+func upload(dir, note string) {
 	// fmt.Println(password)
 	// tar destination
 	log.Println("creating tarball")
@@ -66,7 +65,7 @@ func upload(dir string) {
 	log.Println("uploading to ipfs")
 	hash := ipfs.Add(tarball)
 	log.Printf("hash: %s\n", hash)
-	backups = append(backups, BackupEntry{Hash: hash, Key: key})
+	backups = append(backups, BackupEntry{Hash: hash, Key: key, Note: note})
 	save(backups, filepath)
 }
 
@@ -86,14 +85,27 @@ func download(dir, hash, key string) {
 
 func main() {
 	load(filepath)
+	help := "Commands are:\n\tupload <directory> [optional note to remember what you uploaded]\n\tdownload <ipfs hash> <decryption key> <destination>\n\trehost <ipfs hash> [optional note to remember why you are rehosting this]\n\tlist - shows the stuff you've uploaded +  their keys and also what you're rehosting"
 	if os.Args[1] == "upload" {
 		fmt.Println("upload!")
-		upload(os.Args[2])
+		if len(os.Args) > 3 {
+			fmt.Println("wow it's a note")
+			upload(os.Args[2], os.Args[3])
+		} else {
+			upload(os.Args[2], "")
+		}
 	} else if os.Args[1] == "download" {
 		fmt.Println("download!!")
 		dir, hash, key := os.Args[2], os.Args[3], os.Args[4]
 		download(dir, hash, key)
 	} else if os.Args[1] == "rehost" {
 		ipfs.Pin(os.Args[2])
+	} else if os.Args[1] == "list" {
+		fmt.Printf("%10s %33s %56s\n", "Note", "Hash", "Decryption key")
+		for _, entry := range backups {
+			fmt.Printf("%-20s %46s %46s\n", entry.Note, entry.Hash, entry.Key)
+		}
+	} else {
+		fmt.Println(help)
 	}
 }

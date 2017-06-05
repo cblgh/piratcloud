@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"os/user"
 
 	"github.com/peoples-cloud/pc/crypto"
 	"github.com/peoples-cloud/pc/ipfs"
@@ -19,42 +20,51 @@ type BackupEntry struct {
 }
 
 var backups = make(map[string][]BackupEntry)
-var filepath = ".piratcloud"
+var base string
+var filename = ".piratcloud"
 
-func save(savePath string) {
+func save() {
 	data, err := json.MarshalIndent(backups, "", " ")
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
-	err = ioutil.WriteFile(savePath, data, os.FileMode(0777))
+	err = ioutil.WriteFile(fmt.Sprintf("%s/%s", base, filename), data, os.FileMode(0700))
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 }
 
-func load(savePath string) {
-	data, err := ioutil.ReadFile(savePath)
+func load() {
+	data, err := ioutil.ReadFile(fmt.Sprintf("%s/%s", base, filename))
+	// couldn't find the flat file; create it
 	if err != nil {
-		fmt.Println(err)
+		createDir()
 		return
 	}
 	json.Unmarshal(data, &backups)
 }
 
+func createDir() {
+	// try to create the base folder, inside ~/.config
+	if _, err := os.Stat(base); os.IsNotExist(err) {
+		os.MkdirAll(base, os.FileMode(0700))
+	}
+	// try to create the file
+	f, err := os.OpenFile(fmt.Sprintf("%s/%s", base, filename), os.O_CREATE, 0700)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		log.Fatal(err)
+	}
+}
+
 func upload(dir, note string) {
-	// fmt.Println(password)
 	// tar destination
 	log.Println("creating tarball")
-	curDir, err := os.Getwd()
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println(curDir)
-	// dir := "/home/cblgh/code/piratcloud/test"
-	log.Println("backing up", dir)
-	tarball := fmt.Sprintf("%s/%s", curDir, "piratcloud.tar.gz")
+	tarball := fmt.Sprintf("%s/%s", base, "piratcloud.tar.gz")
 	tar.Pack(dir, tarball)
 	// encrypt tar
 	log.Println("encrypting tarball")
@@ -65,14 +75,15 @@ func upload(dir, note string) {
 	log.Println("uploading to ipfs")
 	hash := ipfs.Add(tarball)
 	log.Printf("hash: %s\n", hash)
+	// save the upload details to our flat file database
 	backups["backups"] = append(backups["backups"], BackupEntry{Hash: hash, Key: key, Note: note})
-	save(filepath)
+	save()
 }
 
 func download(dir, hash, key string) {
-	log.Printf("hash: %s\nkey: %s\n", hash, key)
+	log.Printf("\n\thash: %s\n\t key: %s\n", hash, key)
 	// get from ipfs
-	log.Println("downloading program from ipfs")
+	log.Println("downloading hash from ipfs")
 	ipfs.Get(hash, dir)
 	tarball := fmt.Sprintf("%s/%s", dir, hash)
 	// decrypt
@@ -81,17 +92,28 @@ func download(dir, hash, key string) {
 	// untar
 	log.Println("unpacking tar")
 	tar.Unpack(tarball, dir)
+	// remove encrypted file
+	os.Remove(fmt.Sprintf("%s/%s", dir, hash))
 }
 
 func rehost(hash, note string) {
 	ipfs.Pin(hash)
 	backups["rehosts"] = append(backups["rehosts"], BackupEntry{Hash: hash, Key: "", Note: note})
-	save(filepath)
+	save()
+}
+
+func setBasePath() {
+	usr, err := user.Current()
+	if err != nil {
+		log.Fatal(err)
+	}
+	base = fmt.Sprintf("%s/.config/piratcloud", usr.HomeDir)
 }
 
 func main() {
-	load(filepath)
-	help := "Commands are:\n\tupload <directory> [optional note to remember what you uploaded]\n\tdownload <ipfs hash> <decryption key> <destination>\n\trehost <ipfs hash> [optional note to remember why you are rehosting this]\n\tlist - shows the stuff you've uploaded +  their keys and also what you're rehosting"
+	setBasePath()
+	load()
+	help := "Commands are:\n\tupload <directory> [optional note to remember what you uploaded]\n\tdownload <destination> <ipfs hash> <decryption key> \n\trehost <ipfs hash> [optional note to remember why you are rehosting this]\n\tlist - shows the stuff you've uploaded +  their keys and also what you're rehosting"
 	if os.Args[1] == "upload" {
 		fmt.Println("upload!")
 		if len(os.Args) > 3 {

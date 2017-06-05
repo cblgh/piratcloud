@@ -18,11 +18,11 @@ type BackupEntry struct {
 	Note string
 }
 
-var backups []BackupEntry
+var backups = make(map[string][]BackupEntry)
 var filepath = ".piratcloud"
 
-func save(stuff []BackupEntry, savePath string) {
-	data, err := json.MarshalIndent(stuff, "", " ")
+func save(savePath string) {
+	data, err := json.MarshalIndent(backups, "", " ")
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -65,8 +65,8 @@ func upload(dir, note string) {
 	log.Println("uploading to ipfs")
 	hash := ipfs.Add(tarball)
 	log.Printf("hash: %s\n", hash)
-	backups = append(backups, BackupEntry{Hash: hash, Key: key, Note: note})
-	save(backups, filepath)
+	backups["backups"] = append(backups["backups"], BackupEntry{Hash: hash, Key: key, Note: note})
+	save(filepath)
 }
 
 func download(dir, hash, key string) {
@@ -81,6 +81,12 @@ func download(dir, hash, key string) {
 	// untar
 	log.Println("unpacking tar")
 	tar.Unpack(tarball, dir)
+}
+
+func rehost(hash, note string) {
+	ipfs.Pin(hash)
+	backups["rehosts"] = append(backups["rehosts"], BackupEntry{Hash: hash, Key: "", Note: note})
+	save(filepath)
 }
 
 func main() {
@@ -99,11 +105,22 @@ func main() {
 		dir, hash, key := os.Args[2], os.Args[3], os.Args[4]
 		download(dir, hash, key)
 	} else if os.Args[1] == "rehost" {
-		ipfs.Pin(os.Args[2])
+		if len(os.Args) > 3 {
+			fmt.Println("wow it's a note")
+			rehost(os.Args[2], os.Args[3])
+		} else {
+			rehost(os.Args[2], "")
+		}
 	} else if os.Args[1] == "list" {
+		fmt.Printf("%60s\n", "UPLOADS")
 		fmt.Printf("%10s %33s %56s\n", "Note", "Hash", "Decryption key")
-		for _, entry := range backups {
+		for _, entry := range backups["backups"] {
 			fmt.Printf("%-20s %46s %46s\n", entry.Note, entry.Hash, entry.Key)
+		}
+		fmt.Printf("\n%60s\n", "REHOSTS")
+		fmt.Printf("%10s %33s\n", "Note", "Hash")
+		for _, entry := range backups["rehosts"] {
+			fmt.Printf("%-20s %46s\n", entry.Note, entry.Hash)
 		}
 	} else {
 		fmt.Println(help)

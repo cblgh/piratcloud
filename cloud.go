@@ -23,6 +23,7 @@ var backups = make(map[string][]BackupEntry)
 var basedir string
 var filename = ".piratcloud"
 
+// save upload details into the flatfile
 func save() {
 	data, err := json.MarshalIndent(backups, "", " ")
 	if err != nil {
@@ -36,9 +37,10 @@ func save() {
 	}
 }
 
+// load upload hashes & keys from the flatfile
 func load() {
 	data, err := ioutil.ReadFile(fmt.Sprintf("%s/%s", basedir, filename))
-	// couldn't find the flat file; create it
+	// we couldn't find the flat file, create it
 	if err != nil {
 		createDir()
 		return
@@ -47,7 +49,7 @@ func load() {
 }
 
 func createDir() {
-	// try to create the base folder, inside ~/.config
+	// try to create the base folder inside ~/.config
 	if _, err := os.Stat(basedir); os.IsNotExist(err) {
 		os.MkdirAll(basedir, os.FileMode(0700))
 	}
@@ -61,11 +63,11 @@ func createDir() {
 	}
 }
 
-func upload(dir, note string) {
+func upload(target, note string) {
 	// tar destination
 	log.Println("creating tarball")
 	tarball := fmt.Sprintf("%s/%s", basedir, "piratcloud.tar.gz")
-	tar.Pack(dir, tarball)
+	tar.Pack(target, tarball)
 	// encrypt tar
 	log.Println("encrypting tarball")
 	key, tarball := crypto.Encrypt(tarball)
@@ -81,7 +83,7 @@ func upload(dir, note string) {
 }
 
 func download(dir, hash, key string) {
-	log.Printf("\n\thash: %s\n\t key: %s\n", hash, key)
+	log.Printf("download details \n\thash: %s\n\t key: %s\n", hash, key)
 	// get from ipfs
 	log.Println("downloading hash from ipfs")
 	ipfs.Get(hash, dir)
@@ -119,22 +121,33 @@ func main() {
 	help := "Commands are:\n\tupload <directory> [optional note to remember what you uploaded]\n\tdownload <destination> <ipfs hash> <decryption key> \n\trehost <ipfs hash> [optional note to remember why you are rehosting this]\n\tlist - shows the stuff you've uploaded +  their keys and also what you're rehosting"
 	switch os.Args[1] {
 	case "upload":
-		if len(os.Args) > 3 {
+		switch len(os.Args) {
+		case 4:
 			fmt.Println("wow it's a note")
 			upload(os.Args[2], os.Args[3])
-		} else {
+		case 3:
 			upload(os.Args[2], "")
+		default:
+			fmt.Println(help)
 		}
 	case "rehost":
-		if len(os.Args) > 3 {
+		switch len(os.Args) {
+		case 4:
 			fmt.Println("wow it's a note")
 			rehost(os.Args[2], os.Args[3])
-		} else {
+		case 3:
 			rehost(os.Args[2], "")
+		default:
+			fmt.Println(help)
 		}
 	case "download":
-		dir, hash, key := os.Args[2], os.Args[3], os.Args[4]
-		download(dir, hash, key)
+		switch len(os.Args) {
+		case 5:
+			dir, hash, key := os.Args[2], os.Args[3], os.Args[4]
+			download(dir, hash, key)
+		default:
+			fmt.Println(help)
+		}
 	case "list":
 		fmt.Printf("%60s\n", "UPLOADS")
 		fmt.Printf("%10s %33s %56s\n", "Note", "Hash", "Decryption key")

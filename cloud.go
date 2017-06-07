@@ -11,6 +11,7 @@ import (
 	"github.com/peoples-cloud/pc/crypto"
 	"github.com/peoples-cloud/pc/ipfs"
 	"github.com/peoples-cloud/pc/tar"
+	"github.com/spf13/cobra"
 )
 
 type BackupEntry struct {
@@ -22,6 +23,7 @@ type BackupEntry struct {
 var backups = make(map[string][]BackupEntry)
 var basedir string
 var filename = ".piratcloud"
+var note string
 
 // save upload details into the flatfile
 func save() {
@@ -115,51 +117,78 @@ func setBasedir() {
 	basedir = fmt.Sprintf("%s/.config/piratcloud", usr.HomeDir)
 }
 
+func checkArgsLength(n int, args []string, cmd *cobra.Command) {
+	switch {
+	case len(args) == 0:
+		cmd.Help()
+		os.Exit(0)
+	case len(args) < n:
+		fmt.Println(cmd.Name() + ": too few arguments")
+		fmt.Println(cmd.Use)
+		os.Exit(0)
+	}
+}
+
 func main() {
 	setBasedir()
 	load()
-	help := "Commands are:\n\tupload <directory> [optional note to remember what you uploaded]\n\tdownload <destination> <ipfs hash> <decryption key> \n\trehost <ipfs hash> [optional note to remember why you are rehosting this]\n\tlist - shows the stuff you've uploaded +  their keys and also what you're rehosting"
-	switch os.Args[1] {
-	case "upload":
-		switch len(os.Args) {
-		case 4:
-			fmt.Println("wow it's a note")
-			upload(os.Args[2], os.Args[3])
-		case 3:
-			upload(os.Args[2], "")
-		default:
-			fmt.Println(help)
-		}
-	case "rehost":
-		switch len(os.Args) {
-		case 4:
-			fmt.Println("wow it's a note")
-			rehost(os.Args[2], os.Args[3])
-		case 3:
-			rehost(os.Args[2], "")
-		default:
-			fmt.Println(help)
-		}
-	case "download":
-		switch len(os.Args) {
-		case 5:
-			dir, hash, key := os.Args[2], os.Args[3], os.Args[4]
-			download(dir, hash, key)
-		default:
-			fmt.Println(help)
-		}
-	case "list":
-		fmt.Printf("%60s\n", "UPLOADS")
-		fmt.Printf("%10s %33s %56s\n", "Note", "Hash", "Decryption key")
-		for _, entry := range backups["backups"] {
-			fmt.Printf("%-20s %46s %46s\n", entry.Note, entry.Hash, entry.Key)
-		}
-		fmt.Printf("\n%60s\n", "REHOSTS")
-		fmt.Printf("%10s %33s\n", "Note", "Hash")
-		for _, entry := range backups["rehosts"] {
-			fmt.Printf("%-20s %46s\n", entry.Note, entry.Hash)
-		}
-	default:
-		fmt.Println(help)
+
+	var cmdList = &cobra.Command{
+		Use:   "list",
+		Short: "Lists the stuff you've uploaded, their keys and also what you're rehosting",
+		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Printf("%60s\n", "UPLOADS")
+			fmt.Printf("%10s %33s %56s\n", "Note", "Hash", "Decryption key")
+			for _, entry := range backups["backups"] {
+				fmt.Printf("%-20s %46s %46s\n", entry.Note, entry.Hash, entry.Key)
+			}
+			fmt.Printf("\n%60s\n", "REHOSTS")
+			fmt.Printf("%10s %33s\n", "Note", "Hash")
+			for _, entry := range backups["rehosts"] {
+				fmt.Printf("%-20s %46s\n", entry.Note, entry.Hash)
+			}
+		},
 	}
+
+	var cmdUpload = &cobra.Command{
+		Use:   "upload <directory> [optional note to remember what you uploaded]",
+		Short: "Uploads and encrypts a file or directory, returning its hash and decryption key",
+		Run: func(cmd *cobra.Command, args []string) {
+			checkArgsLength(1, args, cmd)
+			switch len(args) {
+			case 2: // we have a note, add it!
+				upload(args[0], args[1])
+			case 1:
+				upload(args[0], "")
+			}
+		},
+	}
+
+	var cmdDownload = &cobra.Command{
+		Use:   "download <destination> <ipfs hash> <decryption key>",
+		Short: "Downloads an ipfs hash and decrypts it using the supplied key",
+		Run: func(cmd *cobra.Command, args []string) {
+			checkArgsLength(3, args, cmd)
+			dir, hash, key := args[0], args[1], args[2]
+			download(dir, hash, key)
+		},
+	}
+
+	var cmdRehost = &cobra.Command{
+		Use:   "rehost <ipfs hash> [optional note to remember why you are rehosting this]",
+		Short: "Rehost an ipfs hash, basically seeding it for someone else.",
+		Run: func(cmd *cobra.Command, args []string) {
+			checkArgsLength(1, args, cmd)
+			switch len(args) {
+			case 2: // note time, add it!
+				rehost(args[0], args[1])
+			case 1:
+				rehost(args[0], "")
+			}
+		},
+	}
+
+	var rootCmd = &cobra.Command{Use: "cloud"}
+	rootCmd.AddCommand(cmdUpload, cmdDownload, cmdRehost, cmdList)
+	rootCmd.Execute()
 }

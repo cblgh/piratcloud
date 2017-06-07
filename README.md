@@ -71,3 +71,6 @@ Use "cloud [command] --help" for more information about a command.
 
 ## Is it any good?
 Yeah probably
+
+## License
+MIT

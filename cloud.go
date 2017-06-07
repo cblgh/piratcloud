@@ -20,7 +20,7 @@ type BackupEntry struct {
 }
 
 var backups = make(map[string][]BackupEntry)
-var base string
+var basedir string
 var filename = ".piratcloud"
 
 func save() {
@@ -29,7 +29,7 @@ func save() {
 		fmt.Println(err)
 		return
 	}
-	err = ioutil.WriteFile(fmt.Sprintf("%s/%s", base, filename), data, os.FileMode(0700))
+	err = ioutil.WriteFile(fmt.Sprintf("%s/%s", basedir, filename), data, os.FileMode(0700))
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -37,7 +37,7 @@ func save() {
 }
 
 func load() {
-	data, err := ioutil.ReadFile(fmt.Sprintf("%s/%s", base, filename))
+	data, err := ioutil.ReadFile(fmt.Sprintf("%s/%s", basedir, filename))
 	// couldn't find the flat file; create it
 	if err != nil {
 		createDir()
@@ -48,11 +48,11 @@ func load() {
 
 func createDir() {
 	// try to create the base folder, inside ~/.config
-	if _, err := os.Stat(base); os.IsNotExist(err) {
-		os.MkdirAll(base, os.FileMode(0700))
+	if _, err := os.Stat(basedir); os.IsNotExist(err) {
+		os.MkdirAll(basedir, os.FileMode(0700))
 	}
 	// try to create the file
-	f, err := os.OpenFile(fmt.Sprintf("%s/%s", base, filename), os.O_CREATE, 0700)
+	f, err := os.OpenFile(fmt.Sprintf("%s/%s", basedir, filename), os.O_CREATE, 0700)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -64,7 +64,7 @@ func createDir() {
 func upload(dir, note string) {
 	// tar destination
 	log.Println("creating tarball")
-	tarball := fmt.Sprintf("%s/%s", base, "piratcloud.tar.gz")
+	tarball := fmt.Sprintf("%s/%s", basedir, "piratcloud.tar.gz")
 	tar.Pack(dir, tarball)
 	// encrypt tar
 	log.Println("encrypting tarball")
@@ -92,6 +92,8 @@ func download(dir, hash, key string) {
 	// untar
 	log.Println("unpacking tar")
 	tar.Unpack(tarball, dir)
+	log.Printf("unpacking %s into %s\n", tarball, dir)
+
 	// remove encrypted file
 	os.Remove(fmt.Sprintf("%s/%s", dir, hash))
 }
@@ -102,38 +104,38 @@ func rehost(hash, note string) {
 	save()
 }
 
-func setBasePath() {
+// sets the base directory to ~/.config/piratcloud
+func setBasedir() {
 	usr, err := user.Current()
 	if err != nil {
 		log.Fatal(err)
 	}
-	base = fmt.Sprintf("%s/.config/piratcloud", usr.HomeDir)
+	basedir = fmt.Sprintf("%s/.config/piratcloud", usr.HomeDir)
 }
 
 func main() {
-	setBasePath()
+	setBasedir()
 	load()
 	help := "Commands are:\n\tupload <directory> [optional note to remember what you uploaded]\n\tdownload <destination> <ipfs hash> <decryption key> \n\trehost <ipfs hash> [optional note to remember why you are rehosting this]\n\tlist - shows the stuff you've uploaded +  their keys and also what you're rehosting"
-	if os.Args[1] == "upload" {
-		fmt.Println("upload!")
+	switch os.Args[1] {
+	case "upload":
 		if len(os.Args) > 3 {
 			fmt.Println("wow it's a note")
 			upload(os.Args[2], os.Args[3])
 		} else {
 			upload(os.Args[2], "")
 		}
-	} else if os.Args[1] == "download" {
-		fmt.Println("download!!")
-		dir, hash, key := os.Args[2], os.Args[3], os.Args[4]
-		download(dir, hash, key)
-	} else if os.Args[1] == "rehost" {
+	case "rehost":
 		if len(os.Args) > 3 {
 			fmt.Println("wow it's a note")
 			rehost(os.Args[2], os.Args[3])
 		} else {
 			rehost(os.Args[2], "")
 		}
-	} else if os.Args[1] == "list" {
+	case "download":
+		dir, hash, key := os.Args[2], os.Args[3], os.Args[4]
+		download(dir, hash, key)
+	case "list":
 		fmt.Printf("%60s\n", "UPLOADS")
 		fmt.Printf("%10s %33s %56s\n", "Note", "Hash", "Decryption key")
 		for _, entry := range backups["backups"] {
@@ -144,7 +146,7 @@ func main() {
 		for _, entry := range backups["rehosts"] {
 			fmt.Printf("%-20s %46s\n", entry.Note, entry.Hash)
 		}
-	} else {
+	default:
 		fmt.Println(help)
 	}
 }

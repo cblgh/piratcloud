@@ -1,5 +1,5 @@
 # piratcloud
-an ipfs-based encrypted backup solution that lets friends keep backup of each others' important stuff
+an [ipfs-based](https://ipfs.io/) encrypted backup solution that lets friends keep backup of each others' important stuff
 
 
 
@@ -60,7 +60,7 @@ Available Commands:
   download    Downloads an ipfs hash and decrypts it using the supplied key
   help        Help about any command
   list        Lists the stuff you've uploaded, their keys and also what you're rehosting
-  rehost      Rehost an ipfs hash, basically seeding it for someone else.
+  rehost      Rehost an ipfs hash, basically seeding it for someone else
   upload      Uploads and encrypts a file or directory, returning its hash and decryption key
 
 Flags:

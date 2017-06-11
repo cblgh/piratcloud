@@ -4,11 +4,9 @@ an [ipfs-based](https://ipfs.io/) encrypted backup solution that lets friends ke
 
 
 ## How it works
-It basically compresses the target file/folder using tar, encrypts the tarball and uploads the encrypted tarball to ipfs. 
+It basically compresses the target file/folder using tar, encrypts the tarball and uploads the encrypted tarball to ipfs. When you download and restore a backup the process is run in reverse.
 
-When you download and restore a backup the process is run in reverse.
-
-Every time you upload or rehost something, that fact is saved in a flatfile database (a json file). The flatfile database with your uploaded files and their decryption keys exist at `~/.config/piratcloud`.
+Every time you upload or rehost something, that fact is saved in a flatfile database (a json file). The database, which contains your uploaded files and their decryption keys, exists at `~/.config/piratcloud`.
 
 Since the tarball is encrypted, friends that are rehosting your hash can't read its contents. Which is great!
 If other computers are rehosting your hash, all you need to do is keep a backup of `~/.config/piratcloud`!
